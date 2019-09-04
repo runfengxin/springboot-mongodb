@@ -1,5 +1,6 @@
 package com.xrf.mongodb;
 
+import com.alibaba.fastjson.JSONObject;
 import com.xrf.mongodb.model.EntityTest;
 import com.xrf.mongodb.model.EntityTest1;
 import org.junit.Test;
@@ -8,6 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.*;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.mongodb.core.aggregation.DateOperators;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -42,7 +46,7 @@ public class MongodbApplicationTests {
         entityTest1List.add(entityTest1_2);
 
         //新增主体对象
-        EntityTest entityTest = new EntityTest(100L,"test",new Date(),10,entityTest1List);
+        EntityTest entityTest = new EntityTest(66L,"test1",new Date(),88,entityTest1List);
         //新增数据的主键已经存在，则会抛DuplicateKeyException异常
         mongoTemplate.insert(entityTest);
     }
@@ -106,6 +110,33 @@ public class MongodbApplicationTests {
         //分页查询（通过起始行和数量也可以自己实现分页逻辑）
         List<EntityTest> findTestList3 = mongoTemplate.find(Query.query(Criteria.where("parameter3").lt(new Date())).with(sort).skip(3).limit(3) ,EntityTest.class);
 
+    }
+
+    //以时间分组
+    @Test
+    public void group(){
+        Aggregation agg = Aggregation.newAggregation(
+
+                // 第一步：挑选所需的字段，类似select *，*所代表的字段内容
+                Aggregation.project("parameter1", "parameter3", "parameter4", "distance")
+                        .and(DateOperators.DateToString.dateOf("parameter3").toString("%Y-%m-%d")).as("date"),
+                // 第二步：sql where 语句筛选符合条件的记录
+//            Aggregation.match(Criteria.where("userId").is(map.get("userId"))),
+                // 第三步：分组条件，设置分组字段
+                Aggregation.group("date").sum("parameter1").as("parameter1Sum").avg("parameter4").as("parameter4Avg"),
+                // 第四部：排序（根据某字段排序 倒序）
+                Aggregation.sort(Sort.Direction.DESC,"date"),
+                // 第五步：数量(分页)
+//                Aggregation.limit(Integer.parseInt(map.get("pagesCount"))),
+                // 第刘步：重新挑选字段
+                Aggregation.project("date","parameter1Sum","parameter4Avg")
+
+        );
+
+        AggregationResults<JSONObject> results = mongoTemplate.aggregate(agg, "ex_entity_test", JSONObject.class);
+
+        List<JSONObject> mappedResults = results.getMappedResults();
+        System.out.println(mappedResults);
     }
 
 }
